@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GitHub Railway Map</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f6f8fa;
+      color: #24292f;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #24292f;
+      color: #fff;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    header h1 {
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+
+    .train-icon {
+      font-size: 1.4rem;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px 16px;
+    }
+
+    .input-card {
+      background: #fff;
+      border: 1px solid #d0d7de;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .input-card h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 14px;
+      color: #24292f;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .input-row input {
+      flex: 1;
+      min-width: 200px;
+      padding: 8px 12px;
+      border: 1px solid #d0d7de;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .input-row input:focus {
+      border-color: #0969da;
+      box-shadow: 0 0 0 3px rgba(9,105,218,0.15);
+    }
+
+    .btn {
+      padding: 8px 18px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      font-weight: 500;
+      transition: opacity 0.15s;
+    }
+
+    .btn:hover { opacity: 0.85; }
+    .btn:disabled { opacity: 0.5; cursor: default; }
+
+    .btn-primary {
+      background: #2da44e;
+      color: #fff;
+    }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 14px 0;
+      color: #57606a;
+      font-size: 0.8rem;
+    }
+
+    .divider::before,
+    .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #d0d7de;
+    }
+
+    .error-box {
+      background: #fff8f0;
+      border: 1px solid #d5a317;
+      border-radius: 6px;
+      padding: 12px 16px;
+      font-size: 0.875rem;
+      color: #7d4e00;
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    .map-card {
+      background: #fff;
+      border: 1px solid #d0d7de;
+      border-radius: 8px;
+      overflow: hidden;
+      display: none;
+    }
+
+    .map-card.visible { display: block; }
+
+    .map-header {
+      padding: 12px 20px;
+      border-bottom: 1px solid #d0d7de;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .map-header span {
+      font-size: 0.875rem;
+      color: #57606a;
+    }
+
+    .map-wrapper {
+      overflow-x: auto;
+      padding: 8px;
+    }
+
+    #railway-svg {
+      display: block;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 12px 20px;
+      border-top: 1px solid #d0d7de;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.8rem;
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .loading-indicator {
+      text-align: center;
+      padding: 40px;
+      color: #57606a;
+      font-size: 0.9rem;
+      display: none;
+    }
+
+    .loading-indicator.visible { display: block; }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 2px solid #d0d7de;
+      border-top-color: #0969da;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="train-icon">🚆</span>
+    <h1>GitHub Railway Map</h1>
+  </header>
+
+  <div class="container">
+    <div class="input-card">
+      <h2>路線図を生成</h2>
+      <div class="input-row">
+        <input type="text" id="username-input" placeholder="GitHub ユーザー名 (例: apple502j)" />
+        <button class="btn btn-primary" id="btn-user" onclick="loadFromUser()">Visualize</button>
+      </div>
+      <div class="divider">または</div>
+      <div class="input-row">
+        <input type="url" id="data-url-input" placeholder="JSON データ URL (例: https://example.com/repos.json)" />
+        <button class="btn btn-primary" id="btn-url" onclick="loadFromUrl()">Visualize</button>
+      </div>
+    </div>
+
+    <div class="error-box" id="error-box"></div>
+    <div class="loading-indicator" id="loading"><span class="spinner"></span>読み込み中...</div>
+
+    <div class="map-card" id="map-card">
+      <div class="map-header">
+        <strong id="map-title"></strong>
+        <span id="map-subtitle"></span>
+      </div>
+      <div class="map-wrapper">
+        <svg id="railway-svg"></svg>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+  </div>
+
+  <script>
+    // ─── 色定義 ────────────────────────────────────────────────
+    const LANG_COLORS = {
+      'C#':         '#534AB7',
+      'TypeScript': '#378ADD',
+      'Python':     '#639922',
+      'Lua':        '#BA7517',
+      'JavaScript': '#EF9F27',
+      'C++':        '#D85A30',
+      'Java':       '#D4537E',
+      'Go':         '#1D9E75',
+      'Rust':       '#993C1D',
+      'Ruby':       '#E24B4A',
+      'PHP':        '#7F77DD',
+      'Shell':      '#5F5E5A',
+    };
+    const DEFAULT_COLOR = '#888780';
+
+    function getLangColor(lang) {
+      return LANG_COLORS[lang] || DEFAULT_COLOR;
+    }
+
+    // ─── URL パラメータ処理 ────────────────────────────────────
+    (function initFromUrlParams() {
+      const params = new URLSearchParams(window.location.search);
+      const dataUrl = params.get('dataUrl');
+      const user = params.get('user');
+      if (dataUrl) {
+        document.getElementById('data-url-input').value = dataUrl;
+        loadFromUrl();
+      } else if (user) {
+        document.getElementById('username-input').value = user;
+        loadFromUser();
+      }
+    })();
+
+    // ─── データ取得 ────────────────────────────────────────────
+    async function loadFromUrl() {
+      const url = document.getElementById('data-url-input').value.trim();
+      if (!url) { showError('JSON データ URL を入力してください。'); return; }
+      await fetchAndDraw(url, url);
+    }
+
+    async function loadFromUser() {
+      const username = document.getElementById('username-input').value.trim();
+      if (!username) { showError('GitHub ユーザー名を入力してください。'); return; }
+
+      // /api/github-user が存在すればプロキシ経由、なければ直接 GitHub API
+      const proxyUrl = `/api/github-user?user=${encodeURIComponent(username)}`;
+      const directUrl = `https://api.github.com/users/${encodeURIComponent(username)}/repos?type=public&sort=created&per_page=100`;
+
+      setLoading(true);
+      hideError();
+
+      // まずプロキシを試行
+      try {
+        const resp = await fetch(proxyUrl, { method: 'HEAD' });
+        if (resp.ok || resp.status === 405) {
+          // プロキシが存在する
+          await fetchAndDraw(proxyUrl, username, { isProxy: true });
+          return;
+        }
+      } catch (_) { /* プロキシなし */ }
+
+      // 直接 GitHub API
+      await fetchAndDraw(directUrl, username, { isGitHub: true });
+    }
+
+    async function fetchAndDraw(url, label, opts = {}) {
+      setLoading(true);
+      hideError();
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+        const data = await resp.json();
+        if (!Array.isArray(data)) throw new Error('レスポンスが配列形式ではありません。');
+        if (data.length === 0) throw new Error('リポジトリデータが空です。');
+
+        const repos = normalizeRepos(data);
+        drawRailwayMap(repos, label);
+      } catch (err) {
+        showError(`データの取得に失敗しました: ${err.message}`);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // ─── データ正規化 ──────────────────────────────────────────
+    function normalizeRepos(raw) {
+      return raw
+        .filter(r => r.name && r.created_at)
+        .map(r => {
+          let langs;
+          if (Array.isArray(r.languages) && r.languages.length > 0) {
+            langs = r.languages;
+          } else if (Array.isArray(r.language)) {
+            langs = r.language;
+          } else if (typeof r.language === 'string' && r.language) {
+            langs = [r.language];
+          } else {
+            langs = ['Unknown'];
+          }
+          return {
+            name: r.name,
+            created_at: new Date(r.created_at),
+            languages: langs,
+            url: r.html_url || r.url || null,
+            description: r.description || '',
+          };
+        })
+        .filter(r => !isNaN(r.created_at.getTime()))
+        .sort((a, b) => a.created_at - b.created_at)
+        .slice(-50); // 最新 50 件
+    }
+
+    // ─── バリセンタメソッド ────────────────────────────────────
+    function computeSortedLanguages(repos) {
+      const langTimes = {};
+      repos.forEach(repo => {
+        const t = repo.created_at.getTime();
+        repo.languages.forEach(lang => {
+          if (!langTimes[lang]) langTimes[lang] = [];
+          langTimes[lang].push(t);
+        });
+      });
+
+      const barycenters = {};
+      Object.keys(langTimes).forEach(lang => {
+        const times = langTimes[lang];
+        barycenters[lang] = times.reduce((a, b) => a + b, 0) / times.length;
+      });
+
+      return Object.keys(barycenters).sort((a, b) => barycenters[a] - barycenters[b]);
+    }
+
+    // ─── SVG 描画 ──────────────────────────────────────────────
+    function drawRailwayMap(repos, label) {
+      const sortedLangs = computeSortedLanguages(repos);
+      const numLangs = sortedLangs.length;
+
+      // レイアウト定数
+      const ML = 130;  // left margin
+      const MR = 40;   // right margin
+      const MT = 50;   // top margin
+      const MB = 50;   // bottom margin
+      const MIN_WIDTH = 900;
+      const langHeight = 60; // px per language row
+
+      const svgHeight = MT + MB + (numLangs - 1) * langHeight + 40;
+      const minContentWidth = repos.length * 20 + 200;
+      const svgWidth = Math.max(MIN_WIDTH, ML + MR + minContentWidth);
+
+      // 言語インデックスマップ
+      const langMap = {};
+      sortedLangs.forEach((lang, i) => { langMap[lang] = i; });
+
+      // 時間 → X 座標変換
+      const times = repos.map(r => r.created_at.getTime());
+      const tMin = Math.min(...times);
+      const tMax = Math.max(...times);
+      const tRange = tMax - tMin || 1;
+      const xRange = svgWidth - ML - MR;
+
+      function timeToX(t) {
+        return ML + ((t - tMin) / tRange) * xRange;
+      }
+
+      function langToY(lang) {
+        return MT + 20 + langMap[lang] * langHeight;
+      }
+
+      // SVG 組み立て
+      const svg = document.getElementById('railway-svg');
+      svg.innerHTML = '';
+      svg.setAttribute('width', svgWidth);
+      svg.setAttribute('height', svgHeight);
+      svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+
+      // 背景
+      appendSVG(svg, 'rect', { x: 0, y: 0, width: svgWidth, height: svgHeight, fill: '#fff' });
+
+      // 線路（言語ごと）
+      sortedLangs.forEach(lang => {
+        const y = langToY(lang);
+        const color = getLangColor(lang);
+
+        // 線路（点線）
+        appendSVG(svg, 'line', {
+          x1: ML, y1: y, x2: svgWidth - MR, y2: y,
+          stroke: color,
+          'stroke-width': 2.5,
+          'stroke-dasharray': '6,4',
+          opacity: 0.7,
+        });
+
+        // 言語ラベル
+        const text = appendSVG(svg, 'text', {
+          x: ML - 10, y: y + 5,
+          'text-anchor': 'end',
+          fill: color,
+          'font-size': 13,
+          'font-weight': '600',
+          'font-family': 'monospace',
+        });
+        text.textContent = lang;
+      });
+
+      // 時間軸ラベル（年月）
+      const labelSet = new Set();
+      repos.forEach(repo => {
+        const d = repo.created_at;
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        if (!labelSet.has(key)) {
+          labelSet.add(key);
+          const x = timeToX(d.getTime());
+          const axisY = MT + 20 + (numLangs - 1) * langHeight + 24;
+          appendSVG(svg, 'line', {
+            x1: x, y1: MT + 20 - 10, x2: x, y2: axisY - 4,
+            stroke: '#d0d7de', 'stroke-width': 1, 'stroke-dasharray': '2,3',
+          });
+          const t = appendSVG(svg, 'text', {
+            x, y: axisY + 12,
+            'text-anchor': 'middle',
+            fill: '#57606a',
+            'font-size': 10,
+            'font-family': 'monospace',
+          });
+          t.textContent = key;
+        }
+      });
+
+      // 駅を描画
+      repos.forEach(repo => {
+        const x = timeToX(repo.created_at.getTime());
+        const langs = repo.languages;
+
+        if (langs.length === 1) {
+          // 単一言語駅
+          const lang = langs[0];
+          const y = langToY(lang);
+          const color = getLangColor(lang);
+          drawStation(svg, x, y, 5, color, 0.8, repo.name, null);
+        } else {
+          // 複数言語：乗り換え駅
+          const positions = langs.map(lang => ({ lang, y: langToY(lang) }));
+          const ys = positions.map(p => p.y);
+          const centerY = (Math.min(...ys) + Math.max(...ys)) / 2;
+
+          // 乗り換え線（垂直点線）
+          appendSVG(svg, 'line', {
+            x1: x, y1: Math.min(...ys),
+            x2: x, y2: Math.max(...ys),
+            stroke: '#888780',
+            'stroke-width': 1.5,
+            'stroke-dasharray': '3,3',
+            opacity: 0.6,
+          });
+
+          // 各言語線の接続点
+          positions.forEach(({ lang, y }) => {
+            const color = getLangColor(lang);
+            // 言語線上の小●
+            appendSVG(svg, 'circle', {
+              cx: x, cy: y, r: 3,
+              fill: color, opacity: 0.5,
+            });
+            // 中心への接続線
+            appendSVG(svg, 'line', {
+              x1: x, y1: y, x2: x, y2: centerY,
+              stroke: color,
+              'stroke-width': 1,
+              'stroke-dasharray': '2,2',
+              opacity: 0.4,
+            });
+          });
+
+          // 中心の大●（グレー）
+          const transferLabel = `${repo.name} transfer station\n[${langs.join(', ')}]`;
+          drawStation(svg, x, centerY, 7, '#888780', 0.6, transferLabel, langs);
+        }
+      });
+
+      // 凡例更新
+      updateLegend(sortedLangs);
+
+      // マップカードを表示
+      document.getElementById('map-title').textContent = label;
+      document.getElementById('map-subtitle').textContent = `${repos.length} repos, ${numLangs} languages`;
+      document.getElementById('map-card').classList.add('visible');
+    }
+
+    function drawStation(svg, cx, cy, r, color, opacity, label, langs) {
+      const circle = appendSVG(svg, 'circle', {
+        cx, cy, r,
+        fill: color, opacity,
+        style: 'cursor:pointer',
+      });
+
+      // ホバー動作
+      circle.addEventListener('mouseenter', () => {
+        circle.setAttribute('opacity', 1.0);
+        circle.setAttribute('r', r + 2);
+        showTooltip(cx, cy, label, svg);
+      });
+      circle.addEventListener('mouseleave', () => {
+        circle.setAttribute('opacity', opacity);
+        circle.setAttribute('r', r);
+        hideTooltip(svg);
+      });
+    }
+
+    // ─── ツールチップ ──────────────────────────────────────────
+    function showTooltip(x, y, label, svg) {
+      hideTooltip(svg);
+
+      const lines = label.split('\n');
+      const padding = 8;
+      const lineHeight = 16;
+      const boxH = lines.length * lineHeight + padding * 2;
+      const longestLine = lines.reduce((a, b) => a.length > b.length ? a : b, '');
+      const boxW = longestLine.length * 7.5 + padding * 2;
+
+      const svgW = parseInt(svg.getAttribute('width'));
+      let tx = x + 12;
+      if (tx + boxW > svgW - 10) tx = x - boxW - 12;
+      const ty = y - boxH / 2;
+
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('id', 'tooltip');
+
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('x', tx);
+      rect.setAttribute('y', ty);
+      rect.setAttribute('width', boxW);
+      rect.setAttribute('height', boxH);
+      rect.setAttribute('rx', 5);
+      rect.setAttribute('fill', '#24292f');
+      rect.setAttribute('opacity', 0.92);
+      g.appendChild(rect);
+
+      lines.forEach((line, i) => {
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', tx + padding);
+        text.setAttribute('y', ty + padding + (i + 1) * lineHeight - 3);
+        text.setAttribute('fill', i === 0 ? '#fff' : '#adbac7');
+        text.setAttribute('font-size', 12);
+        text.setAttribute('font-family', 'monospace');
+        text.setAttribute('pointer-events', 'none');
+        text.textContent = line;
+        g.appendChild(text);
+      });
+
+      svg.appendChild(g);
+    }
+
+    function hideTooltip(svg) {
+      const tip = svg.getElementById('tooltip');
+      if (tip) tip.remove();
+    }
+
+    // ─── 凡例 ──────────────────────────────────────────────────
+    function updateLegend(langs) {
+      const legend = document.getElementById('legend');
+      legend.innerHTML = '';
+
+      langs.forEach(lang => {
+        const color = getLangColor(lang);
+        const item = document.createElement('div');
+        item.className = 'legend-item';
+
+        const dot = document.createElement('div');
+        dot.className = 'legend-dot';
+        dot.style.background = color;
+
+        const label = document.createElement('span');
+        label.textContent = lang;
+
+        item.appendChild(dot);
+        item.appendChild(label);
+        legend.appendChild(item);
+      });
+
+      // 乗り換え駅の凡例
+      const xferItem = document.createElement('div');
+      xferItem.className = 'legend-item';
+      xferItem.innerHTML = `<div class="legend-dot" style="background:#888780;opacity:0.6"></div><span>乗り換え駅</span>`;
+      legend.appendChild(xferItem);
+    }
+
+    // ─── SVG ヘルパー ──────────────────────────────────────────
+    function appendSVG(parent, tag, attrs) {
+      const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+      Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
+      parent.appendChild(el);
+      return el;
+    }
+
+    // ─── UI ヘルパー ───────────────────────────────────────────
+    function setLoading(val) {
+      document.getElementById('loading').classList.toggle('visible', val);
+      document.getElementById('btn-user').disabled = val;
+      document.getElementById('btn-url').disabled = val;
+      if (val) document.getElementById('map-card').classList.remove('visible');
+    }
+
+    function showError(msg) {
+      const box = document.getElementById('error-box');
+      box.textContent = msg;
+      box.style.display = 'block';
+    }
+
+    function hideError() {
+      document.getElementById('error-box').style.display = 'none';
+    }
+
+    // ─── Enter キー対応 ────────────────────────────────────────
+    document.getElementById('username-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') loadFromUser();
+    });
+    document.getElementById('data-url-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') loadFromUrl();
+    });
+  </script>
+</body>
+</html>
