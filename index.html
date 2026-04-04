@@ -137,7 +137,37 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      background: #fff;
+      position: relative;
+      z-index: 10;
     }
+
+    .map-controls {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 100;
+    }
+
+    .control-btn {
+      width: 36px;
+      height: 36px;
+      background: #fff;
+      border: 1px solid #d0d7de;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      font-size: 1.2rem;
+      user-select: none;
+    }
+
+    .control-btn:hover { background: #f6f8fa; }
 
     .map-header span {
       font-size: 0.875rem;
@@ -145,12 +175,21 @@
     }
 
     .map-wrapper {
-      overflow-x: auto;
-      padding: 8px;
+      overflow: hidden;
+      padding: 0;
+      background: #fdfdfd;
+      height: 700px;
+      cursor: grab;
+    }
+
+    .map-wrapper:active {
+      cursor: grabbing;
     }
 
     #railway-svg {
       display: block;
+      width: 100%;
+      height: 100%;
     }
 
     .legend {
@@ -230,7 +269,12 @@
         <strong id="map-title"></strong>
         <span id="map-subtitle"></span>
       </div>
-      <div class="map-wrapper">
+      <div class="map-wrapper" id="map-wrapper">
+        <div class="map-controls">
+          <div class="control-btn" onclick="zoomIn()" title="Zoom In">＋</div>
+          <div class="control-btn" onclick="zoomOut()" title="Zoom Out">－</div>
+          <div class="control-btn" onclick="resetZoom()" title="Reset Zoom">⟲</div>
+        </div>
         <svg id="railway-svg"></svg>
       </div>
       <div class="legend" id="legend"></div>
@@ -240,23 +284,36 @@
   <script>
     // ─── 色定義 ────────────────────────────────────────────────
     const LANG_COLORS = {
-      'C#':         '#534AB7',
-      'TypeScript': '#378ADD',
-      'Python':     '#639922',
-      'Lua':        '#BA7517',
-      'JavaScript': '#EF9F27',
-      'C++':        '#D85A30',
-      'Java':       '#D4537E',
-      'Go':         '#1D9E75',
-      'Rust':       '#993C1D',
-      'Ruby':       '#E24B4A',
-      'PHP':        '#7F77DD',
-      'Shell':      '#5F5E5A',
+      'C#':         '#5C5CFF',
+      'TypeScript': '#007ACC',
+      'Python':     '#3776AB',
+      'Lua':        '#000080',
+      'JavaScript': '#F7DF1E',
+      'C++':        '#f34b7d',
+      'Java':       '#b07219',
+      'Go':         '#00ADD8',
+      'Rust':       '#dea584',
+      'Ruby':       '#701516',
+      'PHP':        '#4F5D95',
+      'Shell':      '#89e051',
+      'HTML':       '#e34c26',
+      'CSS':        '#563d7c',
     };
-    const DEFAULT_COLOR = '#888780';
+    const DEFAULT_COLOR = '#999';
+
+    const METRO_PALETTE = [
+      '#EE352E', '#0039A6', '#FF6319', '#6CBE45', '#996633', '#A7A9AC', '#FCCC0A', '#808183', '#B933AD', '#00933C', '#00A1DE'
+    ];
+    let paletteIdx = 0;
+    const assignedColors = {};
 
     function getLangColor(lang) {
-      return LANG_COLORS[lang] || DEFAULT_COLOR;
+      if (LANG_COLORS[lang]) return LANG_COLORS[lang];
+      if (assignedColors[lang]) return assignedColors[lang];
+      const color = METRO_PALETTE[paletteIdx % METRO_PALETTE.length];
+      assignedColors[lang] = color;
+      paletteIdx++;
+      return color;
     }
 
     // ─── URL パラメータ処理 ────────────────────────────────────
@@ -378,8 +435,8 @@
       const numLangs = sortedLangs.length;
       if (numLangs === 0) return;
 
-      const width = 1000;
-      const height = 800;
+      const width = 1200;
+      const height = 900;
 
       // D3 データ準備: ノード（リポジトリ）
       const nodes = repos.map(r => ({
@@ -408,70 +465,83 @@
       const svgElement = document.getElementById('railway-svg');
       svgElement.innerHTML = '';
       const svg = d3.select('#railway-svg')
-        .attr('width', width)
-        .attr('height', height);
+        .attr('viewBox', `0 0 ${width} ${height}`);
+
+      const container = svg.append('g').attr('id', 'map-container');
+
+      // 背景のグリッド（ドット）
+      const gridG = container.append('g').attr('class', 'grid');
+      for (let x = 0; x <= width; x += 50) {
+        for (let y = 0; y <= height; y += 50) {
+          gridG.append('circle')
+            .attr('cx', x)
+            .attr('cy', y)
+            .attr('r', 1)
+            .attr('fill', '#e1e4e8');
+        }
+      }
+
+      // ズーム設定
+      window.currentZoom = d3.zoom()
+        .scaleExtent([0.2, 5])
+        .on('zoom', (event) => {
+          container.attr('transform', event.transform);
+        });
+      svg.call(window.currentZoom);
 
       // 力学シミュレーション
       const simulation = d3.forceSimulation(nodes)
-        .force('link', d3.forceLink(links).id(d => d.id).distance(120).strength(1))
-        .force('charge', d3.forceManyBody().strength(-500))
-        .force('x', d3.forceX(width / 2).strength(0.05))
-        .force('y', d3.forceY(height / 2).strength(0.05))
-        .force('collision', d3.forceCollide().radius(80))
+        .force('link', d3.forceLink(links).id(d => d.id).distance(120).strength(1.1))
+        .force('charge', d3.forceManyBody().strength(-1300).distanceMax(800))
+        .force('x', d3.forceX(d => {
+          const timeIdx = repos.findIndex(r => r.name === d.name);
+          return 150 + (timeIdx / (repos.length || 1)) * (width - 300);
+        }).strength(0.4))
+        .force('y', d3.forceY(height / 2).strength(0.2))
+        .force('collision', d3.forceCollide().radius(90))
         .stop();
 
       // シミュレーションを安定させる
-      for (let i = 0; i < 300; ++i) simulation.tick();
-
-      // 境界内に収める
-      nodes.forEach(n => {
-        n.x = Math.max(50, Math.min(width - 50, n.x));
-        n.y = Math.max(50, Math.min(height - 50, n.y));
-      });
+      for (let i = 0; i < 400; ++i) simulation.tick();
 
       // ① 路線を描画（カクカクした線）
-      const lineG = svg.append('g').attr('class', 'lines');
+      const lineG = container.append('g').attr('class', 'lines');
 
-      // 各言語ごとにパスを生成
       sortedLangs.forEach(lang => {
         const color = getLangColor(lang);
-        const langLinks = links.filter(l => l.lang === lang);
-        if (langLinks.length === 0) {
-           // 駅が1つの場合でも位置は確定している
-           return;
-        }
-
-        // 連続するリンクを繋いでパスを作る
-        const pathData = [];
         const langRepos = nodes.filter(n => n.languages.includes(lang))
                                .sort((a, b) => a.created_at - b.created_at);
 
+        if (langRepos.length < 2) return;
+
+        const pathData = [];
         for (let i = 0; i < langRepos.length - 1; i++) {
           const s = langRepos[i], t = langRepos[i+1];
-          pathData.push(...getMetroPath(s.x, s.y, t.x, t.y));
+          const segment = getMetroPath(s.x, s.y, t.x, t.y);
+          if (i === 0) pathData.push(segment[0]);
+          pathData.push(...segment.slice(1));
         }
 
-        if (pathData.length > 0) {
-          const dStr = `M ${pathData[0].x} ${pathData[0].y} ` +
-                       pathData.slice(1).map(p => `L ${p.x} ${p.y}`).join(' ');
+        const dStr = `M ${pathData[0].x} ${pathData[0].y} ` +
+                     pathData.slice(1).map(p => `L ${p.x} ${p.y}`).join(' ');
 
-          lineG.append('path')
-            .attr('d', dStr)
-            .attr('stroke', color)
-            .attr('stroke-width', 6)
-            .attr('fill', 'none')
-            .attr('stroke-linecap', 'round')
-            .attr('stroke-linejoin', 'round');
-        }
+        lineG.append('path')
+          .attr('d', dStr)
+          .attr('stroke', color)
+          .attr('stroke-width', 7)
+          .attr('fill', 'none')
+          .attr('stroke-linecap', 'round')
+          .attr('stroke-linejoin', 'round')
+          .attr('opacity', 0.8);
       });
 
       // ② 駅を描画
-      const stationG = svg.append('g').attr('class', 'stations');
+      const stationG = container.append('g').attr('class', 'stations');
       nodes.forEach(node => {
         const isTransfer = node.languages.length > 1;
         const color = isTransfer ? '#fff' : getLangColor(node.languages[0]);
         const strokeColor = isTransfer ? '#333' : color;
-        const r = isTransfer ? 7 : 5;
+        const r = isTransfer ? 8 : 6;
 
         const g = stationG.append('g')
           .attr('class', 'station')
@@ -480,56 +550,62 @@
              if (node.url) window.open(node.url, '_blank', 'noopener,noreferrer');
           });
 
-        // 外枠または塗りつぶし
         g.append('circle')
           .attr('cx', node.x)
           .attr('cy', node.y)
           .attr('r', r)
           .attr('fill', color)
           .attr('stroke', strokeColor)
-          .attr('stroke-width', 2);
+          .attr('stroke-width', 2.5);
 
         if (isTransfer) {
-          // 乗り換え駅の中央の点
           g.append('circle')
             .attr('cx', node.x)
             .attr('cy', node.y)
-            .attr('r', 2)
+            .attr('r', 2.5)
             .attr('fill', '#333');
         }
 
         // 駅名ラベル
         g.append('text')
-          .attr('x', node.x + 12)
+          .attr('x', node.x + 14)
           .attr('y', node.y + 4)
           .text(node.name)
-          .attr('font-size', '11px')
+          .attr('font-size', '12px')
           .attr('font-family', 'sans-serif')
           .attr('font-weight', 'bold')
           .attr('fill', '#24292f')
           .style('paint-order', 'stroke')
-          .style('stroke', 'rgba(255,255,255,0.8)')
-          .style('stroke-width', '3px')
-          .style('stroke-linecap', 'butt')
-          .style('stroke-linejoin', 'miter')
+          .style('stroke', '#fff')
+          .style('stroke-width', '4px')
+          .style('stroke-linecap', 'round')
+          .style('stroke-linejoin', 'round')
           .style('pointer-events', 'none');
 
-        // ホバーツールチップ用の透明な広い当たり判定
+        // 当たり判定
         g.append('circle')
           .attr('cx', node.x)
           .attr('cy', node.y)
-          .attr('r', 15)
+          .attr('r', 18)
           .attr('fill', 'transparent')
-          .on('mouseenter', () => {
+          .on('mouseenter', (event) => {
             let label = node.name;
             if (node.description) label += `\n${truncateDesc(node.description)}`;
             label += `\n[${node.languages.join(', ')}]`;
-            showTooltip(node.x, node.y, label, svgElement);
+
+            // ズームを考慮した座標計算
+            const transform = d3.zoomTransform(svgElement);
+            const tx = node.x * transform.k + transform.x;
+            const ty = node.y * transform.k + transform.y;
+            showTooltip(tx, ty, label, svgElement);
           })
           .on('mouseleave', () => {
             hideTooltip(svgElement);
           });
       });
+
+      // 初期ズーム位置（全体が見えるように）
+      svg.call(window.currentZoom.transform, d3.zoomIdentity.translate(50, 50).scale(0.8));
 
       // 凡例更新
       updateLegend(sortedLangs);
@@ -553,18 +629,20 @@
       }
 
       // 中間点を計算して、45度と直線の組み合わせにする
-      let midX1, midY1;
+      // 二つの候補（横→斜め または 縦→斜め）のうち、曲がりが自然な方を選ぶ
+      // ここでは基本「水平/垂直に移動してから45度で繋ぐ」が Mini Metro らしい
+      let midX, midY;
       if (absDx > absDy) {
-        // 横に長い場合
-        midX1 = x1 + Math.sign(dx) * (absDx - absDy);
-        midY1 = y1;
+        // 横に長い場合: 水平に移動してから45度
+        midX = x1 + Math.sign(dx) * (absDx - absDy);
+        midY = y1;
       } else {
-        // 縦に長い場合
-        midX1 = x1;
-        midY1 = y1 + Math.sign(dy) * (absDy - absDx);
+        // 縦に長い場合: 垂直に移動してから45度
+        midX = x1;
+        midY = y1 + Math.sign(dy) * (absDy - absDx);
       }
 
-      return [{x: x1, y: y1}, {x: midX1, y: midY1}, {x: x2, y: y2}];
+      return [{x: x1, y: y1}, {x: midX, y: midY}, {x: x2, y: y2}];
     }
 
     // ─── ツールチップ ──────────────────────────────────────────
@@ -641,7 +719,7 @@
       // 乗り換え駅の凡例
       const xferItem = document.createElement('div');
       xferItem.className = 'legend-item';
-      xferItem.innerHTML = `<div class="legend-dot" style="background:#888780;opacity:0.6"></div><span>乗り換え駅</span>`;
+      xferItem.innerHTML = `<div class="legend-dot" style="background:#fff;border:2px solid #333;width:10px;height:10px"></div><span>乗り換え駅</span>`;
       legend.appendChild(xferItem);
     }
 
@@ -666,6 +744,17 @@
 
     function hideError() {
       document.getElementById('error-box').style.display = 'none';
+    }
+
+    // ─── ズーム操作 ──────────────────────────────────────────
+    function zoomIn() {
+      d3.select('#railway-svg').transition().call(window.currentZoom.scaleBy, 1.3);
+    }
+    function zoomOut() {
+      d3.select('#railway-svg').transition().call(window.currentZoom.scaleBy, 0.7);
+    }
+    function resetZoom() {
+      d3.select('#railway-svg').transition().call(window.currentZoom.transform, d3.zoomIdentity.translate(50, 50).scale(0.8));
     }
 
     // ─── Enter キー対応 ────────────────────────────────────────
