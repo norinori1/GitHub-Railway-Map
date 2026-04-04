@@ -375,6 +375,7 @@
     function drawRailwayMap(repos, label) {
       const sortedLangs = computeSortedLanguages(repos);
       const numLangs = sortedLangs.length;
+      if (numLangs === 0) return;
 
       // レイアウト定数
       const ML = 140;           // 左マージン（言語ラベル用）
