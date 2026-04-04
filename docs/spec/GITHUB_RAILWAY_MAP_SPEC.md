@@ -669,7 +669,7 @@ GET https://api.github.com/repos/{owner}/{repo}/languages
 
 このレスポンスは **バイト数**で言語の使用量を示します。
 
-#### ステップ 3: 言語シェアを計算し、10%以上の言語を抽出
+#### ステップ 3: 言語シェアを計算し、1%以上の言語を抽出
 
 ```javascript
 function extractLanguages(languageBytes) {
@@ -685,9 +685,9 @@ function extractLanguages(languageBytes) {
     }))
     .sort((a, b) => b.bytes - a.bytes);  // バイト数でソート
   
-  // 10%以上のシェアがある言語を抽出
+  // 1%以上のシェアがある言語を抽出
   const mainLanguages = languageShare
-    .filter(item => item.percentage >= 10)
+    .filter(item => item.percentage >= 1)
     .map(item => item.language);
   
   return mainLanguages;
@@ -733,7 +733,7 @@ export default async function handler(req, res) {
       page++;
     }
     
-    // ステップ 2&3: 各リポジトリの言語統計を取得し、10%以上の言語を抽出
+    // ステップ 2&3: 各リポジトリの言語統計を取得し、1%以上の言語を抽出
     const reposWithLanguages = await Promise.all(
       allRepos.map(async (repo) => {
         try {
@@ -768,7 +768,7 @@ export default async function handler(req, res) {
               language: lang,
               percentage: (bytes / total) * 100
             }))
-            .filter(item => item.percentage >= 10)  // 10%以上のみ
+            .filter(item => item.percentage >= 1)  // 1%以上のみ
             .map(item => item.language);
           
           return {
@@ -845,7 +845,7 @@ GitHub Token 取得方法：
 
 **フィールド説明:**
 - `language` (string): メイン言語（GitHub API の値）
-- `languages` (array): 10%以上のシェアがある全言語
+- `languages` (array): 1%以上のシェアがある全言語
 
 ### ウィジェット側での利用
 

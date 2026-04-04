@@ -1,6 +1,6 @@
 // api/github-user.js
 // Vercel Serverless Function - GitHub API プロキシ
-// CORS を回避し、複数言語統計 (10% 以上) を付与して返します。
+// CORS を回避し、複数言語統計 (1% 以上) を付与して返します。
 
 export default async function handler(req, res) {
   // CORS ヘッダー
@@ -53,7 +53,7 @@ export default async function handler(req, res) {
       .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
       .slice(-50);
 
-    // ステップ 2 & 3: 言語統計を取得し 10% 以上の言語を抽出
+    // ステップ 2 & 3: 言語統計を取得し 1% 以上の言語を抽出
     const reposWithLanguages = await Promise.all(
       targetRepos.map(async (repo) => {
         const base = {
@@ -79,7 +79,7 @@ export default async function handler(req, res) {
 
           const mainLanguages = Object.entries(languageBytes)
             .map(([lang, bytes]) => ({ language: lang, percentage: (bytes / total) * 100 }))
-            .filter(item => item.percentage >= 10)
+            .filter(item => item.percentage >= 1)
             .map(item => item.language);
 
           return {
