@@ -18,6 +18,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'user parameter required' });
   }
 
+  // GITHUB_TOKEN は省略可能。設定すると API レート制限が 60→5000 req/hour に緩和される。
   const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
   const headers = {
     'Accept': 'application/vnd.github.v3+json',
