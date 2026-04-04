@@ -477,7 +477,10 @@
           const lang = langs[0];
           const y = langToY(lang);
           const color = getLangColor(lang);
-          drawStation(svg, x, y, 5, color, 0.8, repo.name, null);
+          let stationLabel = repo.name;
+          if (repo.description && repo.description.trim()) stationLabel += `\n${truncateDesc(repo.description)}`;
+          stationLabel += `\n${lang}`;
+          drawStation(svg, x, y, 5, color, 0.8, stationLabel, null, repo.url);
         } else {
           // 複数言語：乗り換え駅
           const positions = langs.map(lang => ({ lang, y: langToY(lang) }));
@@ -513,8 +516,10 @@
           });
 
           // 中心の大●（グレー）
-          const transferLabel = `${repo.name} transfer station\n[${langs.join(', ')}]`;
-          drawStation(svg, x, centerY, 7, '#888780', 0.6, transferLabel, langs);
+          let transferLabel = repo.name;
+          if (repo.description && repo.description.trim()) transferLabel += `\n${truncateDesc(repo.description)}`;
+          transferLabel += `\n乗り換え駅\n[${langs.join(', ')}]`;
+          drawStation(svg, x, centerY, 7, '#888780', 0.6, transferLabel, langs, repo.url);
         }
       });
 
@@ -527,11 +532,11 @@
       document.getElementById('map-card').classList.add('visible');
     }
 
-    function drawStation(svg, cx, cy, r, color, opacity, label, langs) {
+    function drawStation(svg, cx, cy, r, color, opacity, label, langs, url) {
       const circle = appendSVG(svg, 'circle', {
         cx, cy, r,
         fill: color, opacity,
-        style: 'cursor:pointer',
+        style: url ? 'cursor:pointer' : 'cursor:default',
       });
 
       // ホバー動作
@@ -545,6 +550,13 @@
         circle.setAttribute('r', r);
         hideTooltip(svg);
       });
+
+      // クリックでリポジトリを開く
+      if (url) {
+        circle.addEventListener('click', () => {
+          window.open(url, '_blank', 'noopener,noreferrer');
+        });
+      }
     }
 
     // ─── ツールチップ ──────────────────────────────────────────
@@ -626,6 +638,10 @@
     }
 
     // ─── SVG ヘルパー ──────────────────────────────────────────
+    function truncateDesc(desc, max = 60) {
+      return desc.length > max ? desc.slice(0, max) + '…' : desc;
+    }
+
     function appendSVG(parent, tag, attrs) {
       const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
       Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
